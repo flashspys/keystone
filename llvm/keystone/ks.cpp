@@ -19,6 +19,7 @@
 
 // DEBUG
 //#include <iostream>
+#include <vector>
 
 #include "ks_priv.h"
 
@@ -654,11 +655,125 @@ int ks_asm(ks_engine *ks,
         ks->MAI->setCommentString(";");
     }
 
-    *stat_count = Parser->Run(false, address);
+    std::vector<int> infoVector = Parser->Run(false, address);
 
     // PPC counts empty statement
     if (ks->arch == KS_ARCH_PPC)
         *stat_count = *stat_count / 2;
+
+    ks->errnum = Parser->KsError;
+
+    delete TAP;
+    delete Parser;
+    delete CE;
+    delete Streamer;
+    printf("SIZE: %lu\n", infoVector.size());
+    if (ks->errnum >= KS_ERR_ASM)
+        return -1;
+    else {
+        *insn_size = Msg.size();
+        encoding = (unsigned char *)malloc(*insn_size);
+        if (!encoding) {
+            return KS_ERR_NOMEM;
+        }
+        memcpy(encoding, Msg.data(), *insn_size);
+        *insn = encoding;
+        *stat_count = infoVector.size();
+        return 0;
+    }
+}
+
+/*
+ @return: 0 on success, or -1 on failure.
+ On failure, call ks_errno() for error code.
+*/
+KEYSTONE_EXPORT
+int ks_asm_felix(ks_engine *ks,
+        const char *assembly,
+        uint64_t address,
+        unsigned char **insn, size_t *insn_size,
+        int** infoArray, size_t* infoSize)
+{
+    MCCodeEmitter *CE;
+    MCStreamer *Streamer;
+    unsigned char *encoding;
+    SmallString<1024> Msg;
+    raw_svector_ostream OS(Msg);
+
+    if (ks->arch == KS_ARCH_EVM) {
+        // handle EVM differently
+        unsigned short opcode = EVM_opcode(assembly);
+        if (opcode == (unsigned short)-1) {
+            // invalid instruction
+            return -1;
+        }
+
+        *insn_size = 1;
+        encoding = (unsigned char *)malloc(*insn_size);
+        encoding[0] = opcode;
+        *insn = encoding;
+        return 0;
+    }
+
+    *insn = NULL;
+    *insn_size = 0;
+
+    MCContext Ctx(ks->MAI, ks->MRI, &ks->MOFI, &ks->SrcMgr, true, address);
+    ks->MOFI.InitMCObjectFileInfo(Triple(ks->TripleName), Ctx);
+    CE = ks->TheTarget->createMCCodeEmitter(*ks->MCII, *ks->MRI, Ctx);
+    if (!CE) {
+        // memory insufficient
+        return KS_ERR_NOMEM;
+    }
+    Streamer = ks->TheTarget->createMCObjectStreamer(
+            Triple(ks->TripleName), Ctx, *ks->MAB, OS, CE, *ks->STI, ks->MCOptions.MCRelaxAll,
+             false);
+            
+    if (!Streamer) {
+        // memory insufficient
+        delete CE;
+        return KS_ERR_NOMEM;
+    }
+
+    // Tell SrcMgr about this buffer, which is what the parser will pick up.
+    ErrorOr<std::unique_ptr<MemoryBuffer>> BufferPtr = MemoryBuffer::getMemBuffer(assembly);
+    if (BufferPtr.getError()) {
+        delete Streamer;
+        delete CE;
+        return KS_ERR_NOMEM;
+    }
+
+    ks->SrcMgr.clearBuffers();
+    ks->SrcMgr.AddNewSourceBuffer(std::move(*BufferPtr), SMLoc());
+
+    Streamer->setSymResolver((void *)(ks->sym_resolver));
+
+    MCAsmParser *Parser = createMCAsmParser(ks->SrcMgr, Ctx, *Streamer, *ks->MAI);
+    if (!Parser) {
+        delete Streamer;
+        delete CE;
+        // memory insufficient
+        return KS_ERR_NOMEM;
+    }
+    MCTargetAsmParser *TAP = ks->TheTarget->createMCAsmParser(*ks->STI, *Parser, *ks->MCII, ks->MCOptions);
+    if (!TAP) { 
+        // memory insufficient
+        delete Parser;
+        delete Streamer;
+        delete CE;
+        return KS_ERR_NOMEM;
+    }
+    TAP->KsSyntax = ks->syntax;
+
+    Parser->setTargetParser(*TAP);
+
+    // TODO: optimize this to avoid setting up NASM every time we call ks_asm()
+    if (ks->arch == KS_ARCH_X86 && ks->syntax == KS_OPT_SYNTAX_NASM) {
+        Parser->initializeDirectiveKindMap(KS_OPT_SYNTAX_NASM);
+        ks->MAI->setCommentString(";");
+    }
+
+    std::vector<int> infoVector = Parser->Run(false, address);
 
     ks->errnum = Parser->KsError;
 
@@ -677,6 +792,18 @@ int ks_asm(ks_engine *ks,
         }
         memcpy(encoding, Msg.data(), *insn_size);
         *insn = encoding;
+
+        infoVector.push_back(0);
+        int* resultArray = (int*)malloc(infoVector.size() * sizeof(int));
+        if(!resultArray) {
+            return KS_ERR_NOMEM;
+        }
+        memcpy(resultArray, infoVector.data(), infoVector.size());
+        *infoSize = infoVector.size();
+        *infoArray = resultArray;
+
         return 0;
+
+
     }
 }

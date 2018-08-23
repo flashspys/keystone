@@ -106,7 +106,7 @@ public:
   virtual void setAssemblerDialect(unsigned i) { }
 
   /// \brief Run the parser on the input source buffer.
-  virtual size_t Run(bool NoInitialTextSection, uint64_t Address, bool NoFinalize = false) = 0;
+  virtual std::vector<int> Run(bool NoInitialTextSection, uint64_t Address, bool NoFinalize = false) {return std::vector<int>();}
 
   virtual void setParsingInlineAsm(bool V) = 0;
   virtual bool isParsingInlineAsm() = 0;

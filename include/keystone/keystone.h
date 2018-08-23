@@ -316,6 +316,12 @@ int ks_asm(ks_engine *ks,
         unsigned char **encoding, size_t *encoding_size,
         size_t *stat_count);
 
+KEYSTONE_EXPORT
+int ks_asm_felix(ks_engine *ks,
+        const char *assembly,
+        uint64_t address,
+        unsigned char **insn, size_t *insn_size,
+        int** infoArray, size_t* infoSize);
 
 /*
  Free memory allocated by ks_asm()

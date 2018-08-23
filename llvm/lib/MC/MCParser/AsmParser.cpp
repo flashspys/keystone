@@ -45,7 +45,7 @@
 #include <vector>
 
 #include <keystone/keystone.h>
-//#include <iostream>
+#include <iostream>
 
 using namespace llvm_ks;
 
@@ -191,7 +191,7 @@ public:
             const MCAsmInfo &MAI);
   ~AsmParser() override;
 
-  size_t Run(bool NoInitialTextSection, uint64_t Address, bool NoFinalize = false) override;
+  std::vector<int> Run(bool NoInitialTextSection, uint64_t Address, bool NoFinalize = false) override;
 
   void addDirectiveHandler(StringRef Directive,
                            ExtensionDirectiveHandler Handler) override {
@@ -666,10 +666,10 @@ const AsmToken &AsmParser::Lex() {
   return *tok;
 }
 
-size_t AsmParser::Run(bool NoInitialTextSection, uint64_t Address, bool NoFinalize)
+std::vector<int> AsmParser::Run(bool NoInitialTextSection, uint64_t Address, bool NoFinalize)
 {
   // count number of statement
-  size_t count = 0;
+  std::vector<int> infoVector;
 
   // Create the initial section, if requested.
   if (!NoInitialTextSection)
@@ -679,7 +679,7 @@ size_t AsmParser::Run(bool NoInitialTextSection, uint64_t Address, bool NoFinali
   Lex();
   if (!Lexer.isNot(AsmToken::Error)) {
     KsError = KS_ERR_ASM_TOKEN_INVALID;
-    return 0;
+    return infoVector;
   }
 
   HadError = false;
@@ -701,18 +701,32 @@ size_t AsmParser::Run(bool NoInitialTextSection, uint64_t Address, bool NoFinali
         0, StringRef(), getContext().getMainFileName()));
   }
 
+  const char* startPointer = Lexer.getLoc().getPointer();
+  int lastSize = 0;
+
   // While we have input, parse each statement.
   while (Lexer.isNot(AsmToken::Eof)) {
     ParseStatementInfo Info;
+    printf("CodeOffset: %ld | ", Lexer.getLoc().getPointer() - startPointer);
+
+    int position = Lexer.getLoc().getPointer() - startPointer;
     if (!parseStatement(Info, nullptr, Address)) {
-      count++;
+      // ui toll
+      printf("ByteSize: %llu\n",    getStreamer().getCurrentFragmentSize() - lastSize);
+      infoVector.push_back(position);
+      infoVector.push_back((int) getStreamer().getCurrentFragmentSize() - lastSize);
+      /*
+      printf("OPCODE: %08x\n", Info.Opcode);
+      printf("ASMRewrite Pointer: %08x\n", Info.AsmRewrites);
+      printf("Operands: %zu\n", Info.ParsedOperands.size());*/
+
       continue;
     }
 
     //printf(">> 222 error = %u\n", Info.KsError);
     if (!KsError)
         KsError = Info.KsError;
-        return 0;
+        return infoVector;
 
     // We had an error, validate that one was emitted and recover by skipping to
     // the next line.
@@ -725,7 +739,7 @@ size_t AsmParser::Run(bool NoInitialTextSection, uint64_t Address, bool NoFinali
       TheCondState.Ignore != StartingCondState.Ignore) {
     //return TokError("unmatched .ifs or .elses");
     KsError = KS_ERR_ASM_DIRECTIVE_TOKEN;
-    return 0;
+    return infoVector;
   }
 
   // Check to see that all assembler local symbols were actually defined.
@@ -745,7 +759,7 @@ size_t AsmParser::Run(bool NoInitialTextSection, uint64_t Address, bool NoFinali
         //return Error(getLexer().getLoc(), "assembler local symbol '" +
         //                                      Sym->getName() + "' not defined");    // qq: set KsError, then return 0
         KsError = KS_ERR_ASM_SYMBOL_MISSING;
-        return 0;
+        return infoVector;
       }
     }
   }
@@ -759,7 +773,7 @@ size_t AsmParser::Run(bool NoInitialTextSection, uint64_t Address, bool NoFinali
       Out.Finish();
 
   //return HadError || getContext().hadError();
-  return count;
+  return infoVector;
 }
 
 void AsmParser::checkForValidSection()
