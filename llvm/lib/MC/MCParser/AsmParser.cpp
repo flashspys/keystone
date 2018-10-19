@@ -707,21 +707,20 @@ std::vector<int> AsmParser::Run(bool NoInitialTextSection, uint64_t Address, boo
   // While we have input, parse each statement.
   while (Lexer.isNot(AsmToken::Eof)) {
     ParseStatementInfo Info;
-    printf("CodeOffset: %ld | ", Lexer.getLoc().getPointer() - startPointer);
 
     int position = Lexer.getLoc().getPointer() - startPointer;
     if (!parseStatement(Info, nullptr, Address)) {
       // ui toll
-      printf("ByteSize: %llu\n",    getStreamer().getCurrentFragmentSize() - lastSize);
+      
       infoVector.push_back(position);
       infoVector.push_back((int) getStreamer().getCurrentFragmentSize() - lastSize);
-      /*
-      printf("OPCODE: %08x\n", Info.Opcode);
-      printf("ASMRewrite Pointer: %08x\n", Info.AsmRewrites);
-      printf("Operands: %zu\n", Info.ParsedOperands.size());*/
 
       continue;
     }
+
+    // If error we push the position and -1 to our infoArray
+    infoVector.push_back(position);
+    infoVector.push_back((int) -1);
 
     //printf(">> 222 error = %u\n", Info.KsError);
     if (!KsError)

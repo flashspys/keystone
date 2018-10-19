@@ -782,6 +782,17 @@ int ks_asm_felix(ks_engine *ks,
     delete CE;
     delete Streamer;
 
+    // populate the result array even if errored
+    int* resultArray = (int*)malloc(infoVector.size() * sizeof(int));
+    if(!resultArray) {
+        return KS_ERR_NOMEM;
+    }
+    for(unsigned int i = 0; i < infoVector.size(); i++) {
+        resultArray[i] = infoVector.at(i);
+    }
+    *infoSize = infoVector.size();
+    *infoArray = resultArray;
+
     if (ks->errnum >= KS_ERR_ASM)
         return -1;
     else {
@@ -792,15 +803,6 @@ int ks_asm_felix(ks_engine *ks,
         }
         memcpy(encoding, Msg.data(), *insn_size);
         *insn = encoding;
-
-        infoVector.push_back(0);
-        int* resultArray = (int*)malloc(infoVector.size() * sizeof(int));
-        if(!resultArray) {
-            return KS_ERR_NOMEM;
-        }
-        memcpy(resultArray, infoVector.data(), infoVector.size());
-        *infoSize = infoVector.size();
-        *infoArray = resultArray;
 
         return 0;
 
