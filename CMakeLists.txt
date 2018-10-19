@@ -54,6 +54,9 @@ else()
     set(LLVM_LIBDIR_SUFFIX "${LLVM_LIBDIR_SUFFIX}" CACHE STRING "Define suffix of library directory name (32/64)")
 endif()
 
+include_directories("/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include")
+set (CMAKE_CXX_FLAGS "-isysroot /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX10.14.sdk")
+
 # Force static runtime libraries
 if (KEYSTONE_BUILD_STATIC_RUNTIME)
     FOREACH(flag
@@ -114,3 +117,4 @@ configure_file(
 
 add_custom_target(uninstall
     COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/CMakeUninstall.cmake)
+
