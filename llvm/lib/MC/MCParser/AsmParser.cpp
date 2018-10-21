@@ -700,17 +700,22 @@ std::vector<int> AsmParser::Run(bool NoInitialTextSection, uint64_t Address, boo
     getContext().setGenDwarfFileNumber(getStreamer().EmitDwarfFileDirective(
         0, StringRef(), getContext().getMainFileName()));
   }
-
+  int alreadyFlushed = 0;
   const char* startPointer = Lexer.getLoc().getPointer();
-
   // While we have input, parse each statement.
   while (Lexer.isNot(AsmToken::Eof)) {
     ParseStatementInfo Info;
-
+    
+    int a = (int) getStreamer().getCurrentFragmentSize();
     if (!parseStatement(Info, nullptr, Address)) {
+      int b = (int) getStreamer().getCurrentFragmentSize();
+      if (b < a) {
+        // buffer was flushed
+        alreadyFlushed += a;
+      }
       // ui toll
       infoVector.push_back(Lexer.getTok().getLoc().getPointer() - startPointer);
-      infoVector.push_back((int) getStreamer().getCurrentFragmentSize());
+      infoVector.push_back((int) getStreamer().getCurrentFragmentSize() + alreadyFlushed);
 
       continue;
     }
@@ -720,10 +725,10 @@ std::vector<int> AsmParser::Run(bool NoInitialTextSection, uint64_t Address, boo
     infoVector.push_back((int) -1);
 
     //printf(">> 222 error = %u\n", Info.KsError);
-    if (!KsError)
+    if (!KsError) {
         KsError = Info.KsError;
         return infoVector;
-
+    }
     // We had an error, validate that one was emitted and recover by skipping to
     // the next line.
     // assert(HadError && "Parse statement returned an error, but none emitted!");
